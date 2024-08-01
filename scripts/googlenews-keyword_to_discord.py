@@ -9,6 +9,7 @@ import json
 import base64
 import sqlite3
 import sys
+import pytz
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode, unquote, quote
 from datetime import datetime, timedelta
 from dateutil import parser
@@ -416,21 +417,25 @@ def parse_date_filter(filter_string):
 
     logging.info(f"파싱 중인 날짜 필터 문자열: {filter_string}")
 
+    if not filter_string:
+        logging.warning("날짜 필터 문자열이 비어있습니다.")
+        return since_date, until_date, past_date
+
     since_match = re.search(r'since:(\d{4}-\d{2}-\d{2})', filter_string)
     until_match = re.search(r'until:(\d{4}-\d{2}-\d{2})', filter_string)
     
     if since_match:
-        since_date = datetime.strptime(since_match.group(1), '%Y-%m-%d')
+        since_date = datetime.strptime(since_match.group(1), '%Y-%m-%d').replace(tzinfo=pytz.UTC)
         logging.info(f"since_date 파싱 결과: {since_date}")
     if until_match:
-        until_date = datetime.strptime(until_match.group(1), '%Y-%m-%d')
+        until_date = datetime.strptime(until_match.group(1), '%Y-%m-%d').replace(tzinfo=pytz.UTC)
         logging.info(f"until_date 파싱 결과: {until_date}")
 
     past_match = re.search(r'past:(\d+)([hdmy])', filter_string)
     if past_match:
         value = int(past_match.group(1))
         unit = past_match.group(2)
-        now = datetime.now()
+        now = datetime.now(pytz.UTC)
         if unit == 'h':
             past_date = now - timedelta(hours=value)
         elif unit == 'd':
@@ -440,13 +445,15 @@ def parse_date_filter(filter_string):
         elif unit == 'y':
             past_date = now - timedelta(days=value*365)  # 근사값 사용
         logging.info(f"past_date 파싱 결과: {past_date}")
+    else:
+        logging.warning("past: 형식의 날짜 필터를 찾을 수 없습니다.")
 
     logging.info(f"최종 파싱 결과 - since_date: {since_date}, until_date: {until_date}, past_date: {past_date}")
     return since_date, until_date, past_date
 
 def is_within_date_range(pub_date, since_date, until_date, past_date):
-    pub_datetime = parser.parse(pub_date)
-    now = datetime.now()
+    pub_datetime = parser.parse(pub_date).replace(tzinfo=pytz.UTC)
+    now = datetime.now(pytz.UTC)
     
     logging.info(f"검사 중인 기사 날짜: {pub_datetime}")
     logging.info(f"현재 날짜: {now}")
